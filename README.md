@@ -1,6 +1,6 @@
-# NexusAI Frontend — Next.js 16 & React 19 Web Application
+# BodhixTech Frontend — Next.js 16 & React 19 Web Application
 
-The frontend client application for **NexusAI**, built with **Next.js 16 (App Router)**, **React 19**, **TypeScript**, **Tailwind CSS v4**, and **Clerk Authentication**. It provides an intuitive interface for building custom AI tools, reviewing Human-in-the-Loop (HITL) checkpoints, connecting Google Workspace assets, and chatting with autonomous AI agents.
+The frontend client application for **BodhixTech**, built with **Next.js 16 (App Router)**, **React 19**, **TypeScript**, **Tailwind CSS v4**, and **Clerk Authentication**. It provides an intuitive interface for building custom AI tools, reviewing Human-in-the-Loop (HITL) checkpoints, connecting Google Workspace assets, and chatting with autonomous AI agents.
 
 ---
 
@@ -119,7 +119,7 @@ NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
 BACKEND_API_URL=http://127.0.0.1:8000
 
 # Dynamic Company / Brand Name
-NEXT_PUBLIC_COMPANY_NAME=NexusAI
+NEXT_PUBLIC_COMPANY_NAME=BodhixTech
 ```
 
 ### 3. Install Dependencies

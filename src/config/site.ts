@@ -4,7 +4,7 @@
  * environment variable with a robust fallback.
  */
 
-export const COMPANY_NAME = (process.env.NEXT_PUBLIC_COMPANY_NAME || 'NexusAI').trim();
+export const COMPANY_NAME = (process.env.NEXT_PUBLIC_COMPANY_NAME || 'BodhixTech').trim();
 export const APP_NAME = COMPANY_NAME;
 
 export const APP_TITLE = `${COMPANY_NAME} | Autonomous Tool Engineering & Tax Intelligence`;
