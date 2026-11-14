@@ -5,6 +5,7 @@ import './globals.css';
 import { ParticlesBackground } from '@/components/ui/ParticlesBackground';
 import { NotificationProvider } from '@/lib/NotificationContext';
 import { GoogleAuthProvider } from '@/components/providers/GoogleAuthProvider';
+import { Toaster } from 'sonner';
 import { COMPANY_NAME, APP_TITLE, APP_DESCRIPTION } from '@/config/site';
 
 const inter = Inter({
@@ -64,6 +65,14 @@ export default function RootLayout({
               <div className="relative z-10 min-h-screen flex flex-col">
                 {children}
               </div>
+              <Toaster
+                position="bottom-right"
+                theme="dark"
+                toastOptions={{
+                  unstyled: true,
+                  className: 'flex justify-end w-full',
+                }}
+              />
             </GoogleAuthProvider>
           </NotificationProvider>
         </body>

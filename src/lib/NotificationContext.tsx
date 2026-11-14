@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { AppNotification } from './types';
+import { appToast } from './toast';
 
 interface NotificationContextType {
   notifications: AppNotification[];
@@ -116,7 +117,33 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             try {
               localStorage.setItem(`nexus_notifications_${currentUserId}`, JSON.stringify(nextList));
             } catch (err) {}
-            // Trigger toast alert only if not duplicate
+            // Trigger toast popup with custom buttons via toast library
+            if (newNotif.type === 'HITL_REQUEST') {
+              appToast.hitl(newNotif.tool_title || 'Approval Required', {
+                description: newNotif.details || 'Human-in-the-loop review needed before proceeding.',
+                action: {
+                  label: 'Review & Authorize',
+                  variant: 'amber',
+                  onClick: () => {
+                    const url = newNotif.data?.approval_url || `/tools/hitl-review?thread_id=${newNotif.thread_id}${newNotif.data?.tool_id ? `&tool_id=${newNotif.data.tool_id}` : ''}`;
+                    window.location.href = url;
+                  },
+                },
+              });
+            } else if (newNotif.status === 'failed' || newNotif.type === 'TOOL_EXECUTION_PARTIAL_FAILURE') {
+              appToast.error(newNotif.tool_title || 'Execution Alert', {
+                description: newNotif.details || newNotif.step_name,
+              });
+            } else if (newNotif.type === 'STEP_PROGRESS') {
+              appToast.info(newNotif.tool_title || 'Execution Progress', {
+                description: `${newNotif.step_name}${newNotif.step_index ? ` (${newNotif.step_index}/${newNotif.total_steps || 4})` : ''}`,
+              });
+            } else {
+              appToast.success(newNotif.tool_title || 'Notification', {
+                description: newNotif.details || newNotif.step_name,
+              });
+            }
+
             setLatestToast(newNotif);
             return nextList;
           });

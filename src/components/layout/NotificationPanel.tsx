@@ -257,65 +257,6 @@ export function NotificationBell() {
         )}
       </AnimatePresence>
 
-      {/* Real-time Floating Step Toast */}
-      <AnimatePresence>
-        {latestToast && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-6 right-6 z-50 max-w-sm rounded-2xl border border-indigo-500/40 bg-slate-950/95 backdrop-blur-xl p-4 shadow-2xl shadow-indigo-950/80 flex items-start gap-3"
-          >
-            <div className="p-2 rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 shrink-0">
-              {getNotificationIcon(latestToast.type, latestToast.status)}
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-white truncate">
-                  {latestToast.tool_title || 'Execution Progress'}
-                </span>
-                <button
-                  onClick={dismissToast}
-                  className="p-1 rounded-md text-slate-400 hover:text-white"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-[10px] font-semibold text-indigo-300">
-                  {latestToast.step_name}
-                </span>
-                {latestToast.step_index && (
-                  <span className="text-[10px] font-mono text-slate-400">
-                    ({latestToast.step_index}/{latestToast.total_steps || 4})
-                  </span>
-                )}
-              </div>
-
-              {latestToast.details && (
-                <p className="text-[11px] text-slate-300 mt-1 line-clamp-2 leading-relaxed">
-                  {latestToast.details}
-                </p>
-              )}
-
-              {latestToast.type === 'HITL_REQUEST' && (
-                <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
-                  <Link
-                    href={latestToast.data?.approval_url || `/tools/hitl-review?thread_id=${latestToast.thread_id}${latestToast.data?.tool_id ? `&tool_id=${latestToast.data.tool_id}` : ''}`}
-                    onClick={() => dismissToast()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-white text-[11px] font-bold shadow-md shadow-amber-500/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                    <span>Review & Authorize</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </Link>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

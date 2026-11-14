@@ -7,6 +7,8 @@ import { apiClient } from '@/lib/api-client';
 import { CustomTool, FormSchema, FormSchemaProperty, UserToolDeployment, GooglePickerDoc } from '@/lib/types';
 import { GoogleOAuthConsentButton } from './GoogleOAuthConsentButton';
 import { GoogleDrivePicker } from './GoogleDrivePicker';
+import { GoogleAuthIntegrationSection, GmailAuthMode } from './GoogleAuthIntegrationSection';
+import { appToast } from '@/lib/toast';
 import { COMPANY_NAME } from '@/config/site';
 import {
   X,
@@ -159,9 +161,11 @@ export function CreateToolModal({ isOpen, onClose, onSuccess }: CreateToolModalP
   const [createdTool, setCreatedTool] = useState<CustomTool | null>(null);
   const [deployment, setDeployment] = useState<UserToolDeployment | null>(null);
   const [deployConfigValues, setDeployConfigValues] = useState<Record<string, any>>({});
-  const [deployEmailChannel, setDeployEmailChannel] = useState<'oauth' | 'app_password' | 'platform_default'>('platform_default');
+  const [deployEmailChannel, setDeployEmailChannel] = useState<GmailAuthMode>('company_email');
   const [deployAppEmail, setDeployAppEmail] = useState('');
   const [deployAppPassword, setDeployAppPassword] = useState('');
+  const [step3DrivePickerEnabled, setStep3DrivePickerEnabled] = useState(false);
+  const [isStep3AuthValid, setIsStep3AuthValid] = useState(true);
   const [isStep3OAuthGranted, setIsStep3OAuthGranted] = useState(false);
   const [step3OAuthEmail, setStep3OAuthEmail] = useState('');
   const [fileAccessChoice, setFileAccessChoice] = useState<'oauth_full' | 'granular_picker' | 'share_email'>('share_email');
@@ -687,21 +691,27 @@ export function CreateToolModal({ isOpen, onClose, onSuccess }: CreateToolModalP
     try {
       const effectiveEmail = deployEmailChannel === 'app_password'
         ? deployAppEmail.trim()
-        : (deployEmailChannel === 'oauth' ? (step3OAuthEmail || user?.primaryEmailAddress?.emailAddress || '') : (user?.primaryEmailAddress?.emailAddress || ''));
+        : (user?.primaryEmailAddress?.emailAddress || '');
+
+      const mappedEmailService = deployEmailChannel === 'oauth'
+        ? 'gmail'
+        : deployEmailChannel === 'app_password'
+        ? 'google_app_password'
+        : deployEmailChannel === 'company_email'
+        ? 'company_email'
+        : (hasGmail ? 'platform_default' : 'none');
 
       const configData: Record<string, any> = {
         ...deployConfigValues,
+        email_service: mappedEmailService,
         email_channel_choice: deployEmailChannel,
-        file_access_choice: hasFileProducts ? fileAccessChoice : 'none',
+        file_access_choice: step3DrivePickerEnabled ? 'granular_picker' : 'none',
         file_products: fileProducts,
         oauth_scope: computedScope,
         user_email: effectiveEmail,
         personal_email: effectiveEmail,
         gmail_app_email: deployAppEmail.trim(),
         gmail_app_password: deployAppPassword.trim(),
-        oauth_granted: needsOAuth ? isStep3OAuthGranted : true,
-        oauth_provider: needsOAuth ? 'google' : 'none',
-        oauth_email: step3OAuthEmail || effectiveEmail,
         google_file_id: pickedGoogleFile?.id,
         google_file_name: pickedGoogleFile?.name,
         google_file_mime: pickedGoogleFile?.mimeType,
@@ -713,6 +723,9 @@ export function CreateToolModal({ isOpen, onClose, onSuccess }: CreateToolModalP
         user_id: currentUserId,
         config_data: configData,
         requires_hitl: deployRequiresHitl,
+        email_service: mappedEmailService,
+        google_email: effectiveEmail,
+        google_app_password: deployAppPassword.trim(),
       });
 
       setDeployment(dep);
@@ -1471,368 +1484,26 @@ export function CreateToolModal({ isOpen, onClose, onSuccess }: CreateToolModalP
                     </div>
                   )}
 
-                  {/* Google Workspace File Access (Sheets, Drive, Docs) */}
-                  {hasFileProducts && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                          <FolderCheck className="w-4 h-4 text-indigo-400" />
-                          <span>Google Workspace File Access</span>
-                        </h4>
-                        <div className="flex items-center gap-1">
-                          {fileProducts.map((p) => (
-                            <span
-                              key={p}
-                              className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20"
-                            >
-                              {formatProductName(p)}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-slate-400">
-                        Choose how this tool instance should access your Google Sheets, Docs, or Drive files:
-                      </p>
-
-                      <div className="grid grid-cols-1 gap-2.5">
-                        {/* Option 1: Total Access from Consent Screen */}
-                        <label
-                          className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
-                            fileAccessChoice === 'oauth_full'
-                              ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500'
-                              : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="fileAccessChoice"
-                            value="oauth_full"
-                            checked={fileAccessChoice === 'oauth_full'}
-                            onChange={() => setFileAccessChoice('oauth_full')}
-                            className="mt-0.5 text-indigo-600 focus:ring-0 bg-slate-900 border-slate-700"
-                          />
-                          <div>
-                            <span className="text-xs font-semibold text-white block">
-                              Total Access from Consent Screen
-                            </span>
-                            <span className="text-[11px] text-slate-400">
-                              Grants full read/write access to {fileProducts.map(formatProductName).join(', ')} directly through Google OAuth consent.
-                            </span>
-                          </div>
-                        </label>
-
-                        {/* Option 2: Granular Access with Picker */}
-                        <div
-                          className={`p-3.5 rounded-xl border transition-all ${
-                            fileAccessChoice === 'granular_picker'
-                              ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500'
-                              : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
-                          }`}
-                        >
-                          <label className="flex items-start gap-3 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="fileAccessChoice"
-                              value="granular_picker"
-                              checked={fileAccessChoice === 'granular_picker'}
-                              onChange={() => setFileAccessChoice('granular_picker')}
-                              className="mt-0.5 text-indigo-600 focus:ring-0 bg-slate-900 border-slate-700"
-                            />
-                            <div>
-                              <span className="text-xs font-semibold text-white block">
-                                Granular Access with Google Drive Picker
-                              </span>
-                              <span className="text-[11px] text-slate-400">
-                                Limits authorization strictly to the specific files or spreadsheets you explicitly select via Google Drive Picker.
-                              </span>
-                            </div>
-                          </label>
-
-                          {fileAccessChoice === 'granular_picker' && (
-                            <div className="mt-3 pt-3 border-t border-slate-800/80">
-                              <GoogleDrivePicker
-                                userId={currentUserId}
-                                viewMimeTypes="application/vnd.google-apps.spreadsheet"
-                                supportDrives={true}
-                                showUploadView={false}
-                                buttonLabel="Select Spreadsheet from Google Drive"
-                                selectedFile={pickedGoogleFile}
-                                onFilePicked={(doc) => {
-                                  if (doc.mimeType === 'application/vnd.google-apps.folder' || (doc as any).type === 'folder' || !doc.mimeType.includes('spreadsheet')) {
-                                    return;
-                                  }
-                                  setPickedGoogleFile(doc);
-                                  setDeployConfigValues((prev) => ({
-                                    ...prev,
-                                    google_file_id: doc.id,
-                                    google_file_name: doc.name,
-                                    google_file_mime: doc.mimeType,
-                                    google_file_url: doc.url,
-                                  }));
-                                }}
-                                onClearSelection={() => {
-                                  setPickedGoogleFile(null);
-                                  setDeployConfigValues((prev) => {
-                                    const next = { ...prev };
-                                    delete next.google_file_id;
-                                    delete next.google_file_name;
-                                    delete next.google_file_mime;
-                                    delete next.google_file_url;
-                                    return next;
-                                  });
-                                }}
-                              />
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Option 3: Share File with Working Email */}
-                        <div
-                          className={`p-3.5 rounded-xl border transition-all ${
-                            fileAccessChoice === 'share_email'
-                              ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500'
-                              : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
-                          }`}
-                        >
-                          <label className="flex items-start gap-3 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="fileAccessChoice"
-                              value="share_email"
-                              checked={fileAccessChoice === 'share_email'}
-                              onChange={() => setFileAccessChoice('share_email')}
-                              className="mt-0.5 text-indigo-600 focus:ring-0 bg-slate-900 border-slate-700"
-                            />
-                            <div>
-                              <span className="text-xs font-semibold text-white block">
-                                Share File with Working Email (No Consent Screen Required)
-                              </span>
-                              <span className="text-[11px] text-slate-400">
-                                No OAuth consent screen needed. Share your Google Sheet or Doc with our service email.
-                              </span>
-                            </div>
-                          </label>
-
-                          {fileAccessChoice === 'share_email' && (
-                            <div className="pl-7 mt-3 pt-3 border-t border-slate-800/80 space-y-2.5">
-                              <div className="p-3 rounded-lg bg-slate-900/90 border border-slate-800 flex items-center justify-between gap-2">
-                                <div className="min-w-0">
-                                  <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">
-                                    Working Service Email (Editor Permission)
-                                  </span>
-                                  <code className="text-xs font-mono text-emerald-400 font-medium truncate block">
-                                    narainad308@gmail.com
-                                  </code>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText('narainad308@gmail.com');
-                                    setEmailCopied(true);
-                                    setTimeout(() => setEmailCopied(false), 2000);
-                                  }}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors shrink-0"
-                                >
-                                  {emailCopied ? (
-                                    <>
-                                      <Check className="w-3.5 h-3.5" />
-                                      <span>Copied</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Copy className="w-3.5 h-3.5" />
-                                      <span>Copy Email</span>
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                              <p className="text-[11px] text-slate-300">
-                                💡 <span className="font-semibold text-slate-200">How to share:</span> Open your Google Sheet or Doc, click the <span className="text-white font-semibold">Share</span> button, add <span className="font-mono text-emerald-300">narainad308@gmail.com</span> with <span className="text-white font-semibold">Editor</span> permissions.
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Other Google Products Integration Notice */}
-                  {otherProducts.length > 0 && (
-                    <div className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex items-start gap-3">
-                      <div className="p-1.5 rounded-lg bg-indigo-600/20 text-indigo-400 shrink-0 mt-0.5">
-                        <ShieldCheck className="w-4 h-4" />
-                      </div>
-                      <div className="text-xs">
-                        <span className="font-bold text-white block">
-                          Required Google Integration: {otherProducts.map(formatProductName).join(', ')}
-                        </span>
-                        <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
-                          This tool integrates with {otherProducts.map(formatProductName).join(' and ')}. Permissions will be included in the Google OAuth authorization below.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Outbound Email Delivery Service (Gmail) */}
-                  {hasGmail && (
-                    <div className="space-y-3">
-                      <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                        <Mail className="w-4 h-4 text-indigo-400" />
-                        <span>Outbound Email Delivery Service</span>
-                      </h4>
-                      <p className="text-[11px] text-slate-400">
-                        Choose which email identity this tool instance should use to dispatch notifications and reports:
-                      </p>
-
-                      <div className="grid grid-cols-1 gap-2.5">
-                        {/* Option 1: Personal account with OAuth */}
-                        <label
-                          className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
-                            deployEmailChannel === 'oauth'
-                              ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500'
-                              : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="deployEmailChannel"
-                            value="oauth"
-                            checked={deployEmailChannel === 'oauth'}
-                            onChange={() => setDeployEmailChannel('oauth')}
-                            className="mt-0.5 text-indigo-600 focus:ring-0 bg-slate-900 border-slate-700"
-                          />
-                          <div>
-                            <span className="text-xs font-semibold text-white block">
-                              Personal Google Account (via OAuth Authorization)
-                            </span>
-                            <span className="text-[11px] text-slate-400">
-                              Dispatches emails directly from your personal Gmail address using user delegation token.
-                            </span>
-                          </div>
-                        </label>
-
-                        {/* Option 2: Provide App Password */}
-                        <label
-                          className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
-                            deployEmailChannel === 'app_password'
-                              ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500'
-                              : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="deployEmailChannel"
-                            value="app_password"
-                            checked={deployEmailChannel === 'app_password'}
-                            onChange={() => setDeployEmailChannel('app_password')}
-                            className="mt-0.5 text-indigo-600 focus:ring-0 bg-slate-900 border-slate-700"
-                          />
-                          <div className="w-full">
-                            <span className="text-xs font-semibold text-white block">
-                              Google Account App Password (Direct SMTP)
-                            </span>
-                            <span className="text-[11px] text-slate-400 block mb-2">
-                              Provide your Google email and generated 16-character Google App Password.
-                            </span>
-
-                            {deployEmailChannel === 'app_password' && (
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-800">
-                                <div>
-                                  <label className="block text-[11px] text-slate-300 mb-1">
-                                    Google Account Email *
-                                  </label>
-                                  <input
-                                    type="email"
-                                    value={deployAppEmail}
-                                    onChange={(e) => setDeployAppEmail(e.target.value)}
-                                    placeholder="user@gmail.com"
-                                    className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-[11px] text-slate-300 mb-1">
-                                    16-Character App Password *
-                                  </label>
-                                  <input
-                                    type="password"
-                                    value={deployAppPassword}
-                                    onChange={(e) => setDeployAppPassword(e.target.value)}
-                                    placeholder="xxxx xxxx xxxx xxxx"
-                                    className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500"
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </label>
-
-                        {/* Option 3: Platform Default Account */}
-                        <label
-                          className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
-                            deployEmailChannel === 'platform_default'
-                              ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500'
-                              : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="deployEmailChannel"
-                            value="platform_default"
-                            checked={deployEmailChannel === 'platform_default'}
-                            onChange={() => setDeployEmailChannel('platform_default')}
-                            className="mt-0.5 text-indigo-600 focus:ring-0 bg-slate-900 border-slate-700"
-                          />
-                          <div>
-                            <span className="text-xs font-semibold text-white block">
-                              Platform Default Outbound Email (narainad308@gmail.com)
-                            </span>
-                            <span className="text-[11px] text-slate-400">
-                              Uses {COMPANY_NAME} managed infrastructure. No OAuth or credentials configuration needed.
-                            </span>
-                          </div>
-                        </label>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Google OAuth Authorization Section (if any product needs OAuth) */}
-                  {needsOAuth && (
-                    <div className="space-y-3 p-4 rounded-xl bg-slate-950/70 border border-slate-800">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                          <KeyRound className="w-4 h-4 text-indigo-400" />
-                          <span>Google OAuth Authorization Required</span>
-                        </h4>
-                        <div className="flex items-center gap-1 flex-wrap">
-                          {requiredOAuthProducts.map((p) => (
-                            <span
-                              key={p}
-                              className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20"
-                            >
-                              {formatProductName(p)}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-slate-400">
-                        Authorize access to your Google account for {requiredOAuthProducts.map(formatProductName).join(', ')}:
-                      </p>
-
-                      <GoogleOAuthConsentButton
-                        userId={currentUserId}
-                        scope={computedScope}
-                        requiredProducts={requiredOAuthProducts}
-                        onStatusChange={(connected, email) => {
-                          setIsStep3OAuthGranted(connected);
-                          if (email) setStep3OAuthEmail(email);
-                        }}
-                        onSuccess={(email) => {
-                          setIsStep3OAuthGranted(true);
-                          if (email) setStep3OAuthEmail(email);
-                        }}
-                      />
-                    </div>
-                  )}
+                  {/* Unified Google Auth & Permissions Component */}
+                  <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-4">
+                    <GoogleAuthIntegrationSection
+                      userId={currentUserId}
+                      products={step3FinalProducts}
+                      emailChoice={deployEmailChannel}
+                      setEmailChoice={setDeployEmailChannel}
+                      appEmail={deployAppEmail}
+                      setAppEmail={setDeployAppEmail}
+                      appPassword={deployAppPassword}
+                      setAppPassword={setDeployAppPassword}
+                      drivePickerEnabled={step3DrivePickerEnabled}
+                      setDrivePickerEnabled={setStep3DrivePickerEnabled}
+                      pickedGoogleFile={pickedGoogleFile}
+                      setPickedGoogleFile={setPickedGoogleFile}
+                      showGmailSection={hasGmail}
+                      showDriveSection={hasFileProducts}
+                      onAuthValidityChange={(valid) => setIsStep3AuthValid(valid)}
+                    />
+                  </div>
 
                   {/* Human-in-the-Loop (HITL) Deployment Gatekeeper */}
                   <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
@@ -1884,11 +1555,7 @@ export function CreateToolModal({ isOpen, onClose, onSuccess }: CreateToolModalP
 
                   <button
                     type="submit"
-                    disabled={
-                      isManualDeploying ||
-                      (needsOAuth && !isStep3OAuthGranted) ||
-                      (hasGmail && deployEmailChannel === 'app_password' && (!deployAppEmail.trim() || !deployAppPassword.trim()))
-                    }
+                    disabled={isManualDeploying || !isStep3AuthValid}
                     className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.99]"
                   >
                     {isManualDeploying ? (
@@ -1896,10 +1563,10 @@ export function CreateToolModal({ isOpen, onClose, onSuccess }: CreateToolModalP
                         <Loader2 className="w-4 h-4 animate-spin" />
                         <span>Deploying Tool Instance...</span>
                       </>
-                    ) : needsOAuth && !isStep3OAuthGranted ? (
+                    ) : !isStep3AuthValid ? (
                       <>
                         <Lock className="w-4 h-4 text-amber-300" />
-                        <span>Grant Google Consent ({requiredOAuthProducts.map(formatProductName).join(', ')}) to Deploy</span>
+                        <span>Complete Google Verification to Deploy</span>
                       </>
                     ) : (
                       <>

@@ -11,6 +11,8 @@ import {
   isProductGranted,
 } from '@/components/tools/GoogleOAuthConsentButton';
 import { GoogleDrivePicker } from '@/components/tools/GoogleDrivePicker';
+import { GoogleAuthIntegrationSection, GmailAuthMode } from '@/components/tools/GoogleAuthIntegrationSection';
+import { appToast } from '@/lib/toast';
 import { apiClient } from '@/lib/api-client';
 import {
   FailedWebhookInfoResponse,
@@ -63,6 +65,13 @@ function OAuthReauthContent() {
   const [jobInfo, setJobInfo] = useState<FailedWebhookInfoResponse | null>(null);
   const [oauthConnected, setOauthConnected] = useState(false);
   const [oauthEmail, setOauthEmail] = useState<string | null>(null);
+
+  // Unified Google Auth & Permissions State
+  const [emailChannelChoice, setEmailChannelChoice] = useState<GmailAuthMode>('company_email');
+  const [appEmail, setAppEmail] = useState('');
+  const [appPassword, setAppPassword] = useState('');
+  const [drivePickerEnabled, setDrivePickerEnabled] = useState(true);
+  const [isAuthValid, setIsAuthValid] = useState(true);
 
   // File selection, auto-check, and history states
   const [pickedFile, setPickedFile] = useState<GooglePickerDoc | null>(null);
@@ -761,105 +770,31 @@ function OAuthReauthContent() {
             </div>
           )}
 
-          {/* Section 2: Outbound Email Delivery Service (Only if tool sends Gmail) */}
-          {hasGmail && (
-            <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-indigo-400" />
-                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Outbound Email Delivery Service (Gmail)
-                  </h3>
-                </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                  Gmail Send
-                </span>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
-                <span className="text-xs font-semibold text-white block">
-                  Personal Google Account (via OAuth Authorization)
-                </span>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Dispatches outgoing messages directly from your personal Gmail address using user delegation token.
-                </p>
-                {oauthConnected ? (
-                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium pt-1 border-t border-slate-800/80">
-                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                    <span>Gmail OAuth Connected ({oauthEmail || 'Authorized'})</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 text-[11px] text-amber-400 font-medium pt-1 border-t border-slate-800/80">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>Gmail permission required below before re-executing jobs.</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Section 3: Other Google Products Integration Notice */}
-          {otherProducts.length > 0 && (
-            <div className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex items-start gap-3">
-              <div className="p-1.5 rounded-lg bg-indigo-600/20 text-indigo-400 shrink-0 mt-0.5">
-                <ShieldCheck className="w-4 h-4" />
-              </div>
-              <div className="text-xs">
-                <span className="font-bold text-white block">
-                  Required Integration: {otherProducts.map(formatProductName).join(', ')}
-                </span>
-                <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
-                  This tool integrates with {otherProducts.map(formatProductName).join(' and ')}. Permissions will be included in the authorization below.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Section 4: Google OAuth Authorization Required (Matching ToolDeployModal) */}
-          {needsOAuth && (
-            <div className="space-y-3 p-5 rounded-2xl bg-slate-900/60 border border-slate-800">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                  <KeyRound className="w-4 h-4 text-indigo-400" />
-                  <span>Google OAuth Authorization Required</span>
-                </h4>
-                <div className="flex items-center gap-1 flex-wrap">
-                  {requiredOAuthProducts.map((p) => (
-                    <span
-                      key={p}
-                      className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20"
-                    >
-                      {formatProductName(p)}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <p className="text-[11px] text-slate-400">
-                Authorize access to your Google account for {requiredOAuthProducts.map(formatProductName).join(', ')}. All required permissions are requested in a single consent screen. No personal profile data is accessed.
-              </p>
-
-              <GoogleOAuthConsentButton
-                userId={effectiveUserId}
-                scope={computedScope}
-                requiredProducts={requiredOAuthProducts}
-                onStatusChange={(connected, email) => {
-                  setOauthConnected(connected);
-                  if (email) setOauthEmail(email);
-                  if (connected && hasFileProducts) {
-                    handleCheckFileAccess();
-                  }
-                }}
-                onSuccess={(email) => {
-                  setOauthConnected(true);
-                  if (email) setOauthEmail(email);
-                  if (hasFileProducts) {
-                    handleCheckFileAccess();
-                  }
-                }}
-              />
-            </div>
-          )}
+          {/* Unified Google Auth & Permissions Component */}
+          <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+            <GoogleAuthIntegrationSection
+              userId={effectiveUserId}
+              products={finalProducts}
+              emailChoice={emailChannelChoice}
+              setEmailChoice={setEmailChannelChoice}
+              appEmail={appEmail}
+              setAppEmail={setAppEmail}
+              appPassword={appPassword}
+              setAppPassword={setAppPassword}
+              drivePickerEnabled={drivePickerEnabled}
+              setDrivePickerEnabled={setDrivePickerEnabled}
+              pickedGoogleFile={pickedFile}
+              setPickedGoogleFile={(doc) => {
+                setPickedFile(doc);
+                if (doc) {
+                  handleSelectOrReactivateFile(doc.id, doc.name, doc.mimeType);
+                }
+              }}
+              showGmailSection={hasGmail}
+              showDriveSection={hasFileProducts}
+              onAuthValidityChange={(valid) => setIsAuthValid(valid)}
+            />
+          </div>
 
           {error && (
             <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-center gap-2 text-rose-300 text-xs">
@@ -872,7 +807,7 @@ function OAuthReauthContent() {
           <div className="pt-2">
             <button
               onClick={handleRestartExecution}
-              disabled={isRetrying || (needsOAuth && !oauthConnected)}
+              disabled={isRetrying || !isAuthValid}
               className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-indigo-600/25 transition-all active:scale-[0.99]"
             >
               {isRetrying ? (
@@ -891,9 +826,9 @@ function OAuthReauthContent() {
                 </>
               )}
             </button>
-            {needsOAuth && !oauthConnected && (
+            {!isAuthValid && (
               <p className="text-[11px] text-center text-slate-500 mt-2">
-                Please complete Google OAuth authorization above to enable webhook re-execution.
+                Please complete Google authorization above to enable webhook re-execution.
               </p>
             )}
           </div>
